@@ -55,6 +55,8 @@ class Settings {
    */
   _sanitize(data) {
     const out = { ...data };
+    // an empty update repository would silently disable update checks
+    if (!out.updateRepo) out.updateRepo = DEFAULTS.updateRepo;
     for (const key of ['downloadDir', 'proxyUrl', 'language', 'updateRepo', 'accent', 'theme', 'proxyMode']) {
       if (typeof out[key] !== 'string') out[key] = DEFAULTS[key];
     }

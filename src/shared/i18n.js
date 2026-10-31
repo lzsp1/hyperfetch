@@ -383,6 +383,17 @@ const en = {
   'notify.unsupported': "System notifications are not available on this system",
   'toast.notifyBlocked': "Notifications are blocked by the system",
   'preview.notification': "This is how a notification looks",
+  'task.rename': "Rename",
+  'rename.title': "Rename download",
+  'rename.save': "Save",
+  'rename.cancel': "Cancel",
+  'rename.hint': "The extension stays editable; invalid characters are replaced.",
+  'rename.empty': "Please enter a file name",
+  'rename.exists': "A file named “{name}” already exists",
+  'rename.busy': "Pause the download before renaming it",
+  'rename.failed': "Rename failed: {error}",
+  'rename.done': "Renamed to {name}",
+  'feeds.enabled': "Updates are checked against {repo}",
 };
 
 const zhCN = {
@@ -725,6 +736,17 @@ const zhCN = {
   'notify.unsupported': "当前系统不支持桌面通知",
   'toast.notifyBlocked': "桌面通知被系统拦截",
   'preview.notification': "通知效果预览",
+  'task.rename': "重命名",
+  'rename.title': "重命名文件",
+  'rename.save': "保存",
+  'rename.cancel': "取消",
+  'rename.hint': "可以修改扩展名，非法字符会被替换",
+  'rename.empty': "请输入文件名",
+  'rename.exists': "已存在同名文件「{name}」",
+  'rename.busy': "请先暂停下载再重命名",
+  'rename.failed': "重命名失败：{error}",
+  'rename.done': "已重命名为 {name}",
+  'feeds.enabled': "更新检查目标：{repo}",
 };
 
 const fr = {
@@ -1067,6 +1089,17 @@ const fr = {
   'notify.unsupported': "Les notifications système ne sont pas disponibles",
   'toast.notifyBlocked': "Les notifications sont bloquées par le système",
   'preview.notification': "Voici à quoi ressemble une notification",
+  'task.rename': "Renommer",
+  'rename.title': "Renommer le fichier",
+  'rename.save': "Enregistrer",
+  'rename.cancel': "Annuler",
+  'rename.hint': "L’extension reste modifiable ; les caractères invalides sont remplacés.",
+  'rename.empty': "Saisissez un nom de fichier",
+  'rename.exists': "Un fichier nommé « {name} » existe déjà",
+  'rename.busy': "Mettez le téléchargement en pause avant de le renommer",
+  'rename.failed': "Échec du renommage : {error}",
+  'rename.done': "Renommé en {name}",
+  'feeds.enabled': "Mises à jour vérifiées sur {repo}",
 };
 
 const es = {
@@ -1409,6 +1442,17 @@ const es = {
   'notify.unsupported': "Las notificaciones del sistema no están disponibles",
   'toast.notifyBlocked': "El sistema bloquea las notificaciones",
   'preview.notification': "Así se ve una notificación",
+  'task.rename': "Renombrar",
+  'rename.title': "Renombrar archivo",
+  'rename.save': "Guardar",
+  'rename.cancel': "Cancelar",
+  'rename.hint': "Puedes cambiar la extensión; los caracteres no válidos se sustituyen.",
+  'rename.empty': "Introduce un nombre de archivo",
+  'rename.exists': "Ya existe un archivo llamado «{name}»",
+  'rename.busy': "Pausa la descarga antes de renombrarla",
+  'rename.failed': "Error al renombrar: {error}",
+  'rename.done': "Renombrado a {name}",
+  'feeds.enabled': "Las actualizaciones se comprueban en {repo}",
 };
 
 const ru = {
@@ -1751,6 +1795,17 @@ const ru = {
   'notify.unsupported': "Системные уведомления недоступны",
   'toast.notifyBlocked': "Уведомления заблокированы системой",
   'preview.notification': "Так выглядит уведомление",
+  'task.rename': "Переименовать",
+  'rename.title': "Переименовать файл",
+  'rename.save': "Сохранить",
+  'rename.cancel': "Отмена",
+  'rename.hint': "Расширение можно менять; недопустимые символы заменяются.",
+  'rename.empty': "Введите имя файла",
+  'rename.exists': "Файл «{name}» уже существует",
+  'rename.busy': "Приостановите загрузку перед переименованием",
+  'rename.failed': "Не удалось переименовать: {error}",
+  'rename.done': "Переименовано в {name}",
+  'feeds.enabled': "Обновления проверяются на {repo}",
 };
 
 const ar = {
@@ -2093,6 +2148,17 @@ const ar = {
   'notify.unsupported': "إشعارات النظام غير متاحة",
   'toast.notifyBlocked': "الإشعارات محجوبة من النظام",
   'preview.notification': "هكذا يبدو الإشعار",
+  'task.rename': "إعادة تسمية",
+  'rename.title': "إعادة تسمية الملف",
+  'rename.save': "حفظ",
+  'rename.cancel': "إلغاء",
+  'rename.hint': "يمكن تعديل الامتداد، وتُستبدل الأحرف غير الصالحة.",
+  'rename.empty': "أدخل اسم الملف",
+  'rename.exists': "يوجد ملف بالاسم «{name}» بالفعل",
+  'rename.busy': "أوقف التنزيل مؤقتًا قبل إعادة التسمية",
+  'rename.failed': "تعذّرت إعادة التسمية: {error}",
+  'rename.done': "أُعيدت التسمية إلى {name}",
+  'feeds.enabled': "يتم التحقق من التحديثات على {repo}",
 };
 
 const MESSAGES = { en, 'zh-CN': zhCN, fr, es, ru, ar };

@@ -9,6 +9,7 @@ const fs = require('fs');
 const { EventEmitter } = require('events');
 const { DownloadJob } = require('./download');
 const i18n = require('./i18n-main');
+const { sanitizeFilename } = require('./util');
 
 const MAX_LOG_LINES = 400;
 const SAVE_DEBOUNCE = 300;
@@ -300,6 +301,74 @@ class DownloadManager extends EventEmitter {
     job.maxSpeed = Math.max(0, Number(value) || 0);
     this.emit('update', { id, state: job.state, maxSpeed: job.maxSpeed });
     this.saveNow();
+  }
+
+  /**
+   * Renames a download.
+   *
+   * - before it starts: only the target name changes
+   * - while running / paused / failed: the `.part` + `.hfd` metadata follow
+   * - when completed: the finished file is renamed on disk
+   *
+   * Returns the updated view so the UI can re-render immediately.
+   */
+  async rename(id, rawName) {
+    const job = this.get(id);
+    if (!job) throw new Error(i18n.t('rename.failed', { error: 'task not found' }));
+    if (job.active) throw new Error(i18n.t('rename.busy'));
+    const name = sanitizeFilename(String(rawName || '').trim());
+    if (!name || name === 'download') throw new Error(i18n.t('rename.empty'));
+    if (name === job.name) return job.toView();
+
+    const fs = require('fs');
+    const pathMod = require('path');
+    const oldPath = job.filePath;
+    const dir = job.dir;
+    const target = pathMod.join(dir, name);
+    if (job.filePath && target.toLowerCase() === job.filePath.toLowerCase()) {
+      job.name = name;
+      this.saveNow();
+      return job.toView();
+    }
+    try {
+      await fs.promises.access(target);
+      throw new Error(i18n.t('rename.exists', { name }));
+    } catch (e) {
+      if (e && e.code !== 'ENOENT') throw e;
+    }
+
+    const hadFile = job.state === 'completed' && oldPath && fs.existsSync(oldPath);
+    if (hadFile) {
+      try {
+        await fs.promises.rename(oldPath, target);
+      } catch (e) {
+        throw new Error(i18n.t('rename.failed', { error: e.message }));
+      }
+      job.name = name;
+      job.filePath = target;
+    } else {
+      // move the partial data and its metadata, if any
+      const pairs = [
+        [`${oldPath}.part`, `${target}.part`],
+        [`${oldPath}.hfd`, `${target}.hfd`],
+      ];
+      if (oldPath && fs.existsSync(oldPath)) pairs.push([oldPath, target]);
+      for (const [from, to] of pairs) {
+        if (!fs.existsSync(from)) continue;
+        try {
+          await fs.promises.rename(from, to);
+        } catch (e) {
+          throw new Error(i18n.t('rename.failed', { error: e.message }));
+        }
+      }
+      job.name = name;
+      if (oldPath) job.filePath = target;
+    }
+
+    this.log(i18n.t('rename.done', { name }));
+    this.emit('update', { ...job.toView() });
+    this.saveNow();
+    return job.toView();
   }
 
   /** Re-applies live settings (global speed limit, concurrency) to running jobs. */

@@ -1,7 +1,7 @@
 {
   "name": "hyperfetch",
   "productName": "HyperFetch",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "HyperFetch — 多线程分段加速下载器",
   "main": "src/main/main.js",
   "author": "HyperFetch",
@@ -18,7 +18,7 @@
     "dist": "electron-builder --win nsis portable",
     "test": "electron test/engine.test.js && node test/util.test.js && node test/update.test.js",
     "test:node": "node test/util.test.js && node test/i18n.test.js && node test/update.test.js",
-    "test:electron": "electron test/engine.test.js && electron test/feedback.test.js && electron test/sound.test.js && electron test/ui.test.js"
+    "test:electron": "electron test/engine.test.js && electron test/rename.test.js && electron test/ui.test.js"
   },
   "devDependencies": {
     "electron": "^33.2.0",

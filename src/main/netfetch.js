@@ -10,7 +10,14 @@ const { resolveResponse } = require('./util');
 /**
  * @returns {Promise<{status:number, headers:object, text:string}>}
  */
-async function netGetText(net, url, { timeout = 15000, signal, headers = {}, maxBytes = 4 * 1024 * 1024 } = {}) {
+async function netGetText(netLike, url, { timeout = 15000, signal, headers = {}, maxBytes = 4 * 1024 * 1024 } = {}) {
+  // Accept either the Electron `net` module, a `{ net }` wrapper, or a ready
+  // `{ request }` object — resolveResponse only needs `.request`.
+  let net;
+  if (netLike && typeof netLike.request === 'function') net = netLike;
+  else if (netLike && netLike.net && typeof netLike.net.request === 'function') net = netLike.net;
+  else throw new Error('net.request is unavailable');
+
   const resp = await resolveResponse(
     { net },
     url,

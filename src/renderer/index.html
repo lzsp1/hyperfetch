@@ -617,6 +617,42 @@
       <footer class="um-foot" id="updateFoot"></footer>
     </div>
 
+    <!-- rename dialog -->
+    <div class="modal-scrim" id="renameScrim"></div>
+    <div class="rename-modal glass-strong" id="renameModal" role="dialog" aria-modal="true" aria-labelledby="renameTitle" aria-hidden="true">
+      <header class="um-head">
+        <div class="um-icon">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M4 6.5h9.5M4 12h7M4 17.5h5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            <path d="m14.5 14.5 5 5M19.5 14.5l-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".55" />
+          </svg>
+        </div>
+        <div class="um-title">
+          <h3 id="renameTitle" data-i18n="rename.title">重命名文件</h3>
+          <p id="renameSub">—</p>
+        </div>
+        <button class="icon-btn" id="renameClose" data-i18n-title="win.close" title="关闭">
+          <svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+        </button>
+      </header>
+      <div class="rename-body">
+        <input
+          id="renameInput"
+          class="text-input rename-input"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          aria-label="file name"
+        />
+        <div class="rename-hint" data-i18n="rename.hint">可以修改扩展名，非法字符会被替换</div>
+        <div class="rename-error" id="renameError" hidden></div>
+      </div>
+      <footer class="um-foot">
+        <span class="spacer"></span>
+        <button class="ghost-btn" id="renameCancel" data-i18n="rename.cancel">取消</button>
+        <button class="btn-primary small" id="renameSave" data-i18n="rename.save">保存</button>
+      </footer>
+    </div>
     <!-- top progress bar -->
     <div class="top-progress" id="topProgress"></div>
 

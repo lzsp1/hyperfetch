@@ -49,6 +49,8 @@ function compareVersions(a, b) {
 /* ------------------------------------------------------------------ */
 
 const GITHUB_API = 'https://api.github.com';
+/** Where HyperFetch itself is published; used when no repository is set. */
+const DEFAULT_REPO = 'lzsp1/hyperfetch';
 
 /** Prefixes tried in order for release assets (first that works wins). */
 const CDN_PREFIXES = [
@@ -109,11 +111,15 @@ class UpdateManager extends EventEmitter {
   }
 
   get repo() {
-    return (this.config.updateRepo || '').trim() || 'OWNER/REPO';
+    // an empty or placeholder value means "use the built-in repository", which
+    // is where the app is actually published
+    const stored = String(this.config.updateRepo || '').trim();
+    if (stored && !/^OWNER\//i.test(stored)) return stored;
+    return DEFAULT_REPO;
   }
 
   get enabled() {
-    return !!this.config.updateRepo && !/^OWNER\//.test(this.config.updateRepo);
+    return !!(this.config.updateRepo || DEFAULT_REPO);
   }
 
   status() {
@@ -363,6 +369,7 @@ function normalizeInstaller(i) {
 
 module.exports = {
   UpdateManager,
+  DEFAULT_REPO,
   compareVersions,
   parseVersion,
   cdnCandidates,

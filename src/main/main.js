@@ -379,6 +379,13 @@ function registerIpc() {
 
   handle('clipboard:read', () => clipboard.readText());
 
+  /** Renames an existing downloaded file (keeps the same folder). */
+  handle('dl:rename', async (_e, id, newName) => {
+    const job = manager.get(id);
+    if (!job) throw new Error(i18nMain.t('rename.failed', { error: 'job not found' }));
+    return manager.rename(id, newName);
+  });
+
   handle('app:env', () => ({
     version: app.getVersion(),
     electron: process.versions.electron,

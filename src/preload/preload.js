@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('api', {
   clearCompleted: () => invoke('dl:clear-completed'),
   setConnections: (id, n) => invoke('dl:set-connections', id, n),
   setMaxSpeed: (id, n) => invoke('dl:set-max-speed', id, n),
+  rename: (id, name) => invoke('dl:rename', id, name),
   probe: (url) => invoke('dl:probe', url),
   pasteFromClipboard: () => invoke('clipboard:read'),
   getLogs: () => invoke('log:list'),

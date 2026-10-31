@@ -105,6 +105,8 @@ const ICONS = {
   code: '<svg viewBox="0 0 24 24"><path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4"/></svg>',
   text: '<svg viewBox="0 0 24 24"><path d="M6 4.5h12v15H6zM9 9h6M9 12.5h6M9 16h3.5"/></svg>',
   dot: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg>',
+  rename: '<svg viewBox="0 0 24 24"><path d="M4 16.5 15 5.5l3.5 3.5L7.5 20H4v-3.5Z"/><path d="m13.5 7 3.5 3.5"/></svg>',
+  rename: '<svg viewBox="0 0 24 24"><path d="M4 16.5 15 5.5l3.5 3.5L7.5 20H4v-3.5Z"/><path d="m13.5 7 3.5 3.5"/></svg>',
 };
 
 const EXT_KIND = {
@@ -366,6 +368,12 @@ function actionsFor(task) {
   if (task.state === 'completed') {
     a.push(`<button class="icon-btn" data-act="open" title="${t('task.openFile')}">${ICONS.open}</button>`);
   }
+  if (task.state !== 'downloading' && task.state !== 'probing') {
+    a.push(`<button class="icon-btn" data-act="rename" title="${t('task.rename')}">${ICONS.rename}</button>`);
+  }
+  if (task.state !== 'downloading' && task.state !== 'probing') {
+    a.push(`<button class="icon-btn" data-act="rename" title="${t('task.rename')}">${ICONS.rename}</button>`);
+  }
   a.push(`<button class="icon-btn" data-act="reveal" title="${t('task.reveal')}">${ICONS.folder}</button>`);
   a.push(`<button class="icon-btn" data-act="details" title="${t('task.details')}">${ICONS.info}</button>`);
   a.push(`<button class="icon-btn danger" data-act="remove" title="${t('task.remove')}">${ICONS.trash}</button>`);
@@ -452,6 +460,8 @@ function pieceHtml(task) {
 }
 
 function updateCard(el, task, forInit = false) {
+  // (the name element is refreshed below so a rename shows immediately)
+  // (the name element is refreshed below so a rename shows immediately)
   const st = stateClass(task);
   el.className = `task ${st}`;
   if (el.dataset.filtered === '1') el.classList.add('hidden');
@@ -770,6 +780,9 @@ async function handleAction(act, id) {
     case 'details':
       openDrawer(id);
       break;
+    case 'rename':
+      openRenameDialog(id);
+      break;
     case 'remove':
       el_remove(id);
       break;
@@ -795,6 +808,83 @@ function el_remove(id) {
     if (!any) syncList(false);
     toast(t('task.removed'), 'info', 2400);
   });
+}
+
+/* ---------------------------------------------------------------- */
+/* rename                                                            */
+/* ---------------------------------------------------------------- */
+
+const renameUI = { id: null, busy: false };
+
+/** Splits "name.ext" so the stem can be pre-selected in the input. */
+function splitName(name) {
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return { stem: name, ext: '' };
+  return { stem: name.slice(0, dot), ext: name.slice(dot) };
+}
+
+function openRenameDialog(id) {
+  const task = state.tasks.get(id);
+  if (!task) return;
+  if (task.state === 'downloading' || task.state === 'probing') {
+    toast(t('rename.busy'), 'err', 2600);
+    return;
+  }
+  renameUI.id = id;
+  renameUI.busy = false;
+  const name = displayName(task);
+  $('#renameSub').textContent = task.state === 'completed' ? task.filePath || name : name;
+  $('#renameInput').value = name;
+  $('#renameError').hidden = true;
+  $('#renameModal').classList.add('open');
+  $('#renameModal').setAttribute('aria-hidden', 'false');
+  $('#renameScrim').classList.add('open');
+  const input = $('#renameInput');
+  requestAnimationFrame(() => {
+    input.focus();
+    // preselect the file stem, keeping the extension editable
+    const { stem } = splitName(name);
+    input.setSelectionRange(0, Math.max(0, stem.length));
+  });
+}
+
+function closeRenameDialog() {
+  renameUI.id = null;
+  $('#renameModal').classList.remove('open');
+  $('#renameModal').setAttribute('aria-hidden', 'true');
+  $('#renameScrim').classList.remove('open');
+}
+
+async function submitRename() {
+  if (!renameUI.id || renameUI.busy) return;
+  const name = $('#renameInput').value.trim();
+  const errEl = $('#renameError');
+  if (!name) {
+    errEl.textContent = t('rename.empty');
+    errEl.hidden = false;
+    return;
+  }
+  renameUI.busy = true;
+  const btn = $('#renameSave');
+  btn.disabled = true;
+  const r = await window.api.rename(renameUI.id, name);
+  btn.disabled = false;
+  renameUI.busy = false;
+  if (!r.ok) {
+    errEl.textContent = r.error || t('rename.failed', { error: '' });
+    errEl.hidden = false;
+    return;
+  }
+  const updated = r.data;
+  state.tasks.set(updated.id, { ...(state.tasks.get(updated.id) || {}), ...updated });
+  const el = cardEls.get(updated.id);
+  if (el) {
+    el.querySelector('.task-name').textContent = displayName(updated);
+    updateCard(el, updated);
+  }
+  if (state.drawerId === updated.id) renderDrawer();
+  closeRenameDialog();
+  toast(t('rename.done', { name: displayName(updated) }), 'ok', 2400);
 }
 
 /* ---------------------------------------------------------------- */
@@ -894,6 +984,16 @@ function renderDrawer() {
             : ''
         }
         ${task.state === 'completed' ? `<button class="ghost-btn" data-dact="open">${ICONS.open} ${t('drawer.open')}</button>` : ''}
+        ${
+          task.state === 'downloading' || task.state === 'probing'
+            ? ''
+            : `<button class="ghost-btn" data-dact="rename">${ICONS.rename} ${t('task.rename')}</button>`
+        }
+        ${
+          task.state === 'downloading' || task.state === 'probing'
+            ? ''
+            : `<button class="ghost-btn" data-dact="rename">${ICONS.rename} ${t('task.rename')}</button>`
+        }
         <button class="ghost-btn" data-dact="reveal">${ICONS.folder} ${t('drawer.folder')}</button>
         <button class="ghost-btn" data-dact="copy">${ICONS.link} ${t('drawer.copy')}</button>
         <button class="ghost-btn" data-dact="remove" style="color:var(--danger);border-color:color-mix(in srgb,var(--danger) 30%,transparent)">${ICONS.trash} ${t('drawer.remove')}</button>
@@ -1603,6 +1703,30 @@ async function boot() {
   $('#btnOpenLicense').addEventListener('click', () => window.api.openUrl(LICENSE_URL));
   $('#btnOpenReleases').addEventListener('click', () => window.api.openUrl(RELEASES_URL));
   $('#updateClose').addEventListener('click', closeUpdateDialog);
+
+  // ---- rename dialog
+  $('#renameClose').addEventListener('click', closeRenameDialog);
+  $('#renameCancel').addEventListener('click', closeRenameDialog);
+  $('#renameScrim').addEventListener('click', closeRenameDialog);
+  $('#renameSave').addEventListener('click', submitRename);
+  $('#renameInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitRename();
+    }
+  });
+
+  // ---- rename dialog
+  $('#renameClose').addEventListener('click', closeRenameDialog);
+  $('#renameCancel').addEventListener('click', closeRenameDialog);
+  $('#renameScrim').addEventListener('click', closeRenameDialog);
+  $('#renameSave').addEventListener('click', submitRename);
+  $('#renameInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitRename();
+    }
+  });
   $('#updateScrim').addEventListener('click', closeUpdateDialog);
   $('#updateFoot').addEventListener('click', (e) => {
     const b = e.target.closest('[data-uact]');
@@ -1622,7 +1746,8 @@ async function boot() {
   window.addEventListener('keydown', (e) => {
     const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
     if (e.key === 'Escape') {
-      if ($('#updateModal').classList.contains('open')) closeUpdateDialog();
+      if ($('#renameModal').classList.contains('open')) closeRenameDialog();
+      else if ($('#updateModal').classList.contains('open')) closeUpdateDialog();
       else if (state.drawerId) closeDrawer();
       else if (document.activeElement === urlInput) urlInput.blur();
     }
