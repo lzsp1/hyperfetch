@@ -371,9 +371,6 @@ function actionsFor(task) {
   if (task.state !== 'downloading' && task.state !== 'probing') {
     a.push(`<button class="icon-btn" data-act="rename" title="${t('task.rename')}">${ICONS.rename}</button>`);
   }
-  if (task.state !== 'downloading' && task.state !== 'probing') {
-    a.push(`<button class="icon-btn" data-act="rename" title="${t('task.rename')}">${ICONS.rename}</button>`);
-  }
   a.push(`<button class="icon-btn" data-act="reveal" title="${t('task.reveal')}">${ICONS.folder}</button>`);
   a.push(`<button class="icon-btn" data-act="details" title="${t('task.details')}">${ICONS.info}</button>`);
   a.push(`<button class="icon-btn danger" data-act="remove" title="${t('task.remove')}">${ICONS.trash}</button>`);
@@ -578,50 +575,45 @@ function matchesFilter(task) {
   }
 }
 
+/**
+ * Rebuilds the visible task list.
+ *
+ * The cards are reconciled against state.order: unknown ids are dropped, new
+ * ones created, and DOM order matches the model. Cards that are no longer in
+ * the model are removed immediately (with a CSS exit animation) instead of
+ * lingering until a timer fires.
+ */
 function syncList(animate = true) {
   const list = $('#taskList');
   const empty = $('#listEmpty');
   const ids = state.order.filter((id) => state.tasks.has(id) && matchesFilter(state.tasks.get(id)));
 
-  // remove stale cards
-  for (const [id, el] of cardEls) {
-    if (!state.tasks.has(id)) {
-      el.classList.add('leaving');
-      setTimeout(() => el.remove(), 360);
+  // 1. drop cards whose task no longer exists or no longer matches the filter
+  for (const [id, el] of Array.from(cardEls)) {
+    if (!ids.includes(id)) {
       cardEls.delete(id);
+      el.classList.add('leaving');
+      el.style.pointerEvents = 'none';
+      setTimeout(() => el.remove(), 360);
+      // detach right away so the grid does not reserve space for it
+      if (el.parentNode) el.parentNode.removeChild(el);
     }
   }
 
-  // order cards
+  // 2. build / order the remaining cards
   let prev = null;
   for (const id of ids) {
     const task = state.tasks.get(id);
     const el = ensureCard(task);
-    if (!el.isConnected) {
-      if (animate) {
-        el.style.animationDelay = '0ms';
-      }
-    }
-    el.classList.remove('hidden');
+    el.classList.remove('hidden', 'leaving');
     el.dataset.filtered = '0';
+    if (!animate) el.style.animation = 'none';
     const target = prev ? prev.nextSibling : list.firstChild;
     if (target !== el) list.insertBefore(el, target);
     prev = el;
-    if (!animate) el.style.animation = 'none';
   }
 
-  // hidden (filtered out) ones stay in DOM but hidden — drop them to keep DOM small
-  for (const [id, el] of cardEls) {
-    if (!ids.includes(id)) {
-      el.classList.add('leaving');
-      const task = state.tasks.get(id);
-      setTimeout(() => {
-        el.remove();
-        if (cardEls.get(id) === el) cardEls.delete(id);
-      }, 360);
-    }
-  }
-
+  // 3. empty state
   empty.classList.toggle('hidden', ids.length > 0);
   if (!ids.length && state.order.length > 0) {
     empty.querySelector('h3').textContent = t('empty.filteredTitle');
@@ -672,7 +664,15 @@ function updateDocTitle(speed, active) {
   }
 }
 
+/**
+ * Ids the user removed. Late progress events for them must be ignored,
+ * otherwise a cancelled job final update recreates the card after removal.
+ */
+const removedIds = new Set();
+
 function upsertTask(task, { prependOrder = true } = {}) {
+  if (!task || !task.id) return;
+  if (removedIds.has(task.id)) return; // already removed by the user
   const existed = state.tasks.has(task.id);
   state.tasks.set(task.id, task);
   if (!state.order.includes(task.id)) {
@@ -712,6 +712,7 @@ function scheduleFrame() {
     const now = performance.now();
     for (const [id, patch] of pendingUpdates) {
       pendingUpdates.delete(id);
+      if (removedIds.has(id)) continue;
       const prev = state.tasks.get(id);
       if (!prev) continue;
       const merged = { ...prev, ...patch };
@@ -734,23 +735,27 @@ function scheduleFrame() {
 }
 let lastDrawerRender = 0;
 
+/**
+ * Removes a task from the UI. Called both after the user clicks "remove" and
+ * when the main process reports that a task is gone, so it is idempotent.
+ */
 function removeTask(id) {
-  const el = cardEls.get(id);
-  if (el) {
-    el.classList.add('leaving');
-    setTimeout(() => el.remove(), 360);
-    cardEls.delete(id);
-  }
+  removedIds.add(id);
+  pendingUpdates.delete(id);
+  const existed = state.tasks.has(id);
   state.tasks.delete(id);
   state.order = state.order.filter((x) => x !== id);
-  if (state.drawerId === id) closeDrawer();
-  updateCounters();
-  if (!state.tasks.size) syncList(false);
-  else {
-    const any = state.order.some((x) => matchesFilter(state.tasks.get(x)));
-    $('#listEmpty').classList.toggle('hidden', any);
-    if (!any) syncList(false);
+  const el = cardEls.get(id);
+  if (el) {
+    cardEls.delete(id);
+    el.classList.add('leaving');
+    el.style.pointerEvents = 'none';
+    setTimeout(() => el.remove(), 360);
+    if (el.parentNode) el.parentNode.removeChild(el);
   }
+  if (state.drawerId === id) closeDrawer();
+  syncList(false);
+  return existed;
 }
 
 /* ---------------------------------------------------------------- */
@@ -792,20 +797,12 @@ async function handleAction(act, id) {
 }
 
 function el_remove(id) {
-  const el = cardEls.get(id);
-  window.api.remove(id).then(() => {
-    if (el) {
-      el.classList.add('leaving');
-      setTimeout(() => el.remove(), 360);
-      cardEls.delete(id);
+  window.api.remove(id).then((r) => {
+    if (r && r.ok === false) {
+      toast(r.error || t('task.removeFailed'), 'err', 3000);
+      return;
     }
-    state.tasks.delete(id);
-    state.order = state.order.filter((x) => x !== id);
-    if (state.drawerId === id) closeDrawer();
-    updateCounters();
-    const any = state.order.some((x) => matchesFilter(state.tasks.get(x)));
-    $('#listEmpty').classList.toggle('hidden', any);
-    if (!any) syncList(false);
+    removeTask(id);
     toast(t('task.removed'), 'info', 2400);
   });
 }
@@ -984,11 +981,6 @@ function renderDrawer() {
             : ''
         }
         ${task.state === 'completed' ? `<button class="ghost-btn" data-dact="open">${ICONS.open} ${t('drawer.open')}</button>` : ''}
-        ${
-          task.state === 'downloading' || task.state === 'probing'
-            ? ''
-            : `<button class="ghost-btn" data-dact="rename">${ICONS.rename} ${t('task.rename')}</button>`
-        }
         ${
           task.state === 'downloading' || task.state === 'probing'
             ? ''

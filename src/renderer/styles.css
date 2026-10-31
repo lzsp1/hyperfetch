@@ -1135,6 +1135,11 @@ select.select option,
   width: 15px;
   height: 15px;
   fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
 }
 .ghost-btn:hover {
   color: var(--text);
@@ -1294,7 +1299,8 @@ select.select option,
 .task:hover {
   border-color: var(--stroke-2);
   background: var(--surface-2);
-  transform: translateY(-1px);
+  /* No translateY here: shifting the card made the pointer fall off its edge,
+     which toggled :hover on/off and made the action highlight flicker. */
   box-shadow: var(--shadow-1), 0 18px 40px -30px var(--acc-glow);
 }
 .task.leaving {
@@ -2951,7 +2957,6 @@ html[data-theme='light'] .ghost-btn.accent:hover {
 .lang-option:hover {
   background: var(--surface-2);
   border-color: var(--stroke-2);
-  transform: translateY(-1px);
 }
 .lang-option.active {
   border-color: transparent;

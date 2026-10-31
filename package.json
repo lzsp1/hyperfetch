@@ -1,7 +1,7 @@
 {
   "name": "hyperfetch",
   "productName": "HyperFetch",
-  "version": "1.3.0",
+  "version": "26.10.311",
   "description": "HyperFetch — 多线程分段加速下载器",
   "main": "src/main/main.js",
   "author": "HyperFetch",
