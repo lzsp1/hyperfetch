@@ -5,3 +5,4 @@ exe/
 .uitest*/
 screenshots/
 *.log
+.github/workflows/
