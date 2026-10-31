@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      Runs the completion chimes.
+      CSP notes: Electron treats a file:// document as an opaque origin, so
+      'self' does not match its own scripts — the script is allowed explicitly
+      and there is no other capability on this page.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; media-src data:; connect-src data:;"
+    />
+    <title>HyperFetch sound player</title>
+  </head>
+  <body>
+    <script>
+      (() => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        let ctx = null;
+        const cache = new Map();
+
+        function ensureContext() {
+          if (!ctx) ctx = new AC();
+          return ctx;
+        }
+
+        async function decode(dataUrl) {
+          if (cache.has(dataUrl)) return cache.get(dataUrl);
+          const c = ensureContext();
+          const bin = atob(dataUrl.split(',')[1]);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+          const buffer = await new Promise((resolve, reject) => {
+            const maybe = c.decodeAudioData(bytes.buffer.slice(0), resolve, reject);
+            if (maybe && maybe.then) maybe.then(resolve, reject);
+          });
+          cache.set(dataUrl, buffer);
+          return buffer;
+        }
+
+        window.playChime = async (dataUrl, volume) => {
+          try {
+            const c = ensureContext();
+            if (c.state === 'suspended') await c.resume();
+            const buffer = await decode(dataUrl);
+            const src = c.createBufferSource();
+            const gain = c.createGain();
+            gain.gain.value = Math.max(0, Math.min(1, Number(volume) || 0));
+            src.buffer = buffer;
+            src.connect(gain).connect(c.destination);
+            src.start();
+            return { ok: true, seconds: buffer.duration };
+          } catch (e) {
+            return { ok: false, error: String((e && e.message) || e) };
+          }
+        };
+
+        window.soundPlayerReady = true;
+      })();
+    </script>
+  </body>
+</html>

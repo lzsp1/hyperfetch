@@ -1,0 +1,88 @@
+{
+  "name": "hyperfetch",
+  "productName": "HyperFetch",
+  "version": "1.2.1",
+  "description": "HyperFetch — 多线程分段加速下载器",
+  "main": "src/main/main.js",
+  "author": "HyperFetch",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lzsp1/hyperfetch.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test:ui": "electron test/ui.test.js",
+    "pack": "electron-builder --win portable",
+    "dist": "electron-builder --win nsis portable",
+    "test": "electron test/engine.test.js && node test/util.test.js && node test/update.test.js",
+    "test:node": "node test/util.test.js && node test/i18n.test.js && node test/update.test.js",
+    "test:electron": "electron test/engine.test.js && electron test/feedback.test.js && electron test/sound.test.js && electron test/ui.test.js"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.hyperfetch.app",
+    "productName": "HyperFetch",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "LICENSE",
+      "README.md",
+      "package.json",
+      "!**/*.map",
+      "!.tools/**",
+      "!release/**",
+      "!screenshots/**",
+      "!test/**",
+      "!tools/**",
+      "!exe/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "HyperFetch-${version}-${arch}-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "HyperFetch-${version}-portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "HyperFetch",
+      "installerLanguages": [
+        "zh_CN"
+      ],
+      "language": "2052",
+      "artifactName": "HyperFetch-${version}-${arch}-setup.exe"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
