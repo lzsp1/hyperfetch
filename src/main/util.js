@@ -75,6 +75,9 @@ const RETRYABLE_CODES = new Set([
   'ERR_STREAM_PREMATURE_CLOSE',
   'UND_ERR_SOCKET',
   'ETIMEOUT_HEADERS',
+  // a connection that went silent without closing: retry, keeping the data
+  // already written to disk
+  'ESTALL',
 ]);
 
 function isRetryable(err) {
@@ -371,6 +374,12 @@ function requestOnce(netArg, url, { headers = {}, timeout = 15000, signal, metho
         clearTimeout(timer);
         timer = null;
       }
+      // Headers are in: a body that stalls is the reader's job to police
+      // (it has its own byte-level watchdog), so the header timer must not
+      // linger and fire a bogus ETIMEDOUT mid-download.
+      res.on?.('close', () => {
+        if (timer) clearTimeout(timer);
+      });
       const status = res.statusCode;
       settle('resolve', {
         redirect: false,
@@ -415,7 +424,7 @@ async function resolveResponse(ctx, url, opts = {}) {
       current = r.url;
       continue;
     }
-    return { ...r, iter: toAsyncIterable(r.body), finalUrl: current, redirects: i };
+    return { ...r, iter: toAsyncIterable(r.body, { stallMs: opts.stallMs || 0 }), finalUrl: current, redirects: i };
   }
   throw new Error('重定向次数过多');
 }
@@ -556,55 +565,123 @@ class SegmentedWriter extends EventEmitter {
  * response itself, the real stream is one level down — unwrap it rather than
  * silently returning an unreadable body.
  */
-function toAsyncIterable(stream, depth = 0) {
+/**
+ * Wraps an EventEmitter body into an async iterable that can be cancelled and
+ * that never waits forever: if no byte arrives for `stallMs`, it throws a
+ * retryable STALL error instead of hanging.
+ */
+function toAsyncIterable(stream, { stallMs = 0 } = {}) {
   if (!stream) return null;
   if (typeof stream.on !== 'function') {
-    if (depth < 3 && stream.body && typeof stream.body === 'object') {
-      return toAsyncIterable(stream.body, depth + 1);
-    }
+    if (stream.body && typeof stream.body === 'object') return toAsyncIterable(stream.body, { stallMs });
     return typeof stream[Symbol.asyncIterator] === 'function' ? stream : null;
   }
-  // Node streams already support for-await; only wrap event-emitter bodies.
-  if (typeof stream.pipe === 'function') return stream;
-  const events = (req) => {
-    const chunks = [];
-    let ended = false;
-    let failure = null;
-    let wake = null;
-    const notify = () => {
-      if (wake) {
-        const w = wake;
-        wake = null;
-        w();
-      }
-    };
-    req.on('data', (chunk) => {
-      chunks.push(chunk);
-      notify();
-    });
-    req.on('end', () => {
-      ended = true;
-      notify();
-    });
-    req.on('error', (e) => {
-      failure = e || new Error('读取响应失败');
-      notify();
-    });
-    return async function* iterate() {
-      for (;;) {
-        if (chunks.length) {
-          yield chunks.shift();
-          continue;
-        }
-        if (failure) throw failure;
-        if (ended) return;
-        await new Promise((r) => {
-          wake = r;
-        });
-      }
-    };
+  // Node readable streams support for-await natively, but that path cannot be
+  // time-boxed, so a silent connection would hang forever. Only take the fast
+  // path when no stall budget was requested.
+  if (!stallMs && typeof stream.pipe === 'function' && typeof stream[Symbol.asyncIterator] === 'function') {
+    return stream;
+  }
+
+  const chunks = [];
+  let ended = false;
+  let failure = null;
+  let wake = null;
+  let cancelled = false;
+  let lastByteAt = Date.now();
+
+  const notify = () => {
+    if (wake) {
+      const w = wake;
+      wake = null;
+      w();
+    }
   };
-  return events(stream)();
+
+  const cleanup = () => {
+    try {
+      stream.removeListener?.('data', onData);
+      stream.removeListener?.('end', onEnd);
+      stream.removeListener?.('error', onError);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const onData = (chunk) => {
+    lastByteAt = Date.now();
+    chunks.push(chunk);
+    notify();
+  };
+  const onEnd = () => {
+    ended = true;
+    notify();
+  };
+  const onError = (e) => {
+    failure = e || new Error('读取响应失败');
+    notify();
+  };
+
+  stream.on('data', onData);
+  stream.on('end', onEnd);
+  stream.on('error', onError);
+
+  const iterator = {
+    /** Unblocks a pending read and makes the next step throw. */
+    cancel(reason) {
+      cancelled = true;
+      failure = reason || new Error('已取消');
+      notify();
+      try {
+        stream.destroy?.();
+      } catch {
+        /* ignore */
+      }
+    },
+    async next() {
+      for (;;) {
+        if (chunks.length) return { value: chunks.shift(), done: false };
+        if (cancelled) return { value: undefined, done: true };
+        if (failure) {
+          cleanup();
+          throw failure;
+        }
+        if (ended) {
+          cleanup();
+          return { value: undefined, done: true };
+        }
+        // Wait for data, but never longer than the stall budget.
+        const waitMs = stallMs > 0 ? Math.max(250, stallMs - (Date.now() - lastByteAt)) : 0;
+        await new Promise((resolve) => {
+          let settled = false;
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            if (wake === done) wake = null;
+            clearTimeout(timer);
+            resolve();
+          };
+          wake = done;
+          const timer = waitMs > 0 ? setTimeout(done, waitMs) : null;
+        });
+        if (stallMs > 0 && !chunks.length && !ended && !failure && Date.now() - lastByteAt >= stallMs) {
+          cleanup();
+          const err = new Error('连接长时间无响应');
+          err.code = 'ESTALL';
+          throw err;
+        }
+      }
+    },
+    return() {
+      iterator.cancel();
+      cleanup();
+      return Promise.resolve({ value: undefined, done: true });
+    },
+    [Symbol.asyncIterator]() {
+      return this;
+    },
+  };
+  return iterator;
 }
 
 /**

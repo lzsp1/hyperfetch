@@ -30,8 +30,14 @@ const {
 const i18n = require('./i18n-main');
 
 const MIN_PIECE = 256 * 1024; // never create pieces smaller than 256 KiB
-const DEFAULT_TIMEOUT = 15000;
-const MAX_RETRIES = 5;
+// Time allowed for the response headers. A blocked tunnel usually drops the
+// request outright, so a shorter budget means a faster recovery.
+const DEFAULT_TIMEOUT = 12000;
+const MAX_RETRIES = 5; // kept for compatibility with older metadata
+const PATIENT_RETRIES = 40; // total attempts per segment on a flaky network
+const MAX_BACKOFF_MS = 15000;
+/** No bytes for this long means the connection is dead even if it looks open. */
+const STALL_TIMEOUT_MS = 6000;
 const MAX_PIECES = 64;
 
 let seq = 0;
@@ -793,18 +799,22 @@ class DownloadJob extends EventEmitter {
       } catch (e) {
         if (signal.aborted || isAbort(e)) throw new AbortedError();
         attempt += 1;
-        if (attempt > MAX_RETRIES || !isRetryable(e)) throw e;
-        const wait = Math.min(6000, 400 * 2 ** (attempt - 1));
+        // network errors are retried patiently: a dropped tunnel must not kill
+        // the download. Non-network errors (404, disk full) still fail fast.
+        if (attempt > PATIENT_RETRIES || !isRetryable(e)) throw e;
+        const wait = Math.min(MAX_BACKOFF_MS, 400 * 2 ** Math.min(attempt - 1, 7));
         this._log(
           i18n.t('log.segmentRetry', {
             index: seg.index,
             error: friendlyError(e),
             wait: (wait / 1000).toFixed(1),
             attempt,
-            max: MAX_RETRIES,
+            max: PATIENT_RETRIES,
           })
         );
-        await sleep(wait);
+        // a stalled connection resumes where it stopped, so retry it a little
+        // less eagerly than a reset (which usually recovers immediately)
+        await sleep(e.code === 'ESTALL' ? Math.min(3000, 500 * attempt) : wait);
       }
     }
   }
@@ -819,6 +829,7 @@ class DownloadJob extends EventEmitter {
       timeout: DEFAULT_TIMEOUT,
       signal,
       headers,
+      stallMs: STALL_TIMEOUT_MS,
     });
 
     if (resp.statusCode === 200) {
@@ -858,8 +869,24 @@ class DownloadJob extends EventEmitter {
     }
 
     let pos = start;
+    // Watchdog: a "half-dead" connection sends nothing but never closes. Without
+    // this the segment would wait forever and the UI would sit at 0 B/s.
+    let lastByteAt = Date.now();
+    let stalled = false;
+    const watchdog = setInterval(() => {
+      if (stalled || Date.now() - lastByteAt <= STALL_TIMEOUT_MS) return;
+      stalled = true;
+      try {
+        resp.body?.destroy?.();
+      } catch {
+        /* ignore */
+      }
+    }, 1000);
+    if (watchdog.unref) watchdog.unref();
+
     try {
       for await (const chunk of body) {
+        lastByteAt = Date.now();
         if (signal.aborted) throw new AbortedError();
         let buf = chunk;
         const remain = end + 1 - pos;
@@ -874,8 +901,21 @@ class DownloadJob extends EventEmitter {
       }
     } catch (e) {
       if (signal.aborted || isAbort(e)) throw new AbortedError();
+      if (stalled) {
+        // retryable: the caller backs off and asks for the rest again
+        const err = new Error(i18n.t('log.stalled'));
+        err.code = 'ECONNRESET';
+        throw err;
+      }
       if (pos === start) throw e;
       const err = new Error(i18n.t('log.interrupted', { error: e.message || e || e.code || i18n.t('errors.unknown') }));
+      err.code = 'ECONNRESET';
+      throw err;
+    } finally {
+      clearInterval(watchdog);
+    }
+    if (stalled) {
+      const err = new Error(i18n.t('log.stalled'));
       err.code = 'ECONNRESET';
       throw err;
     }
@@ -898,6 +938,7 @@ class DownloadJob extends EventEmitter {
       timeout: DEFAULT_TIMEOUT,
       signal,
       headers: from > 0 ? { Range: `bytes=${from}-` } : {},
+      stallMs: STALL_TIMEOUT_MS,
     });
     if (resp.statusCode >= 400) {
       const err = new Error(prettyStatus(resp.statusCode) || `HTTP ${resp.statusCode}`);
@@ -922,8 +963,22 @@ class DownloadJob extends EventEmitter {
     let got = base;
     let windowBytes = 0;
     let windowStart = Date.now();
+    // same stall watchdog as the segmented mode
+    let lastByteAt = Date.now();
+    let stalled = false;
+    const watchdog = setInterval(() => {
+      if (stalled || Date.now() - lastByteAt <= STALL_TIMEOUT_MS) return;
+      stalled = true;
+      try {
+        resp.body?.destroy?.();
+      } catch {
+        /* ignore */
+      }
+    }, 1000);
+    if (watchdog.unref) watchdog.unref();
     try {
       for await (const chunk of body) {
+        lastByteAt = Date.now();
         if (signal.aborted) throw new AbortedError();
         const ok = this._file.write(chunk);
         got += chunk.length;
@@ -940,7 +995,17 @@ class DownloadJob extends EventEmitter {
       await new Promise((resolve, reject) => this._file.end((err) => (err ? reject(err) : resolve())));
     } catch (e) {
       if (signal.aborted || isAbort(e)) throw new AbortedError();
+      if (stalled) {
+        // leave what we have on disk; resume will continue from there
+        this.received = got;
+        this._file = null;
+        const err = new Error(i18n.t('log.stalled'));
+        err.code = 'ECONNRESET';
+        throw err;
+      }
       throw e;
+    } finally {
+      clearInterval(watchdog);
     }
     if (!this.total) this.total = got;
     if (got !== this.total) {
@@ -968,6 +1033,14 @@ class DownloadJob extends EventEmitter {
     }, 120);
   }
 
+  /** Effective throughput used for the ETA (smoothed, ignores dead moments). */
+  _etaSpeed(raw) {
+    const eff = Number.isFinite(raw) ? Math.max(0, raw) : 0;
+    // never show an ETA based on a near-zero sample: that is what produced
+    // "estimated 3 days" the moment a connection hiccupped
+    return eff < 4096 ? 0 : eff;
+  }
+
   _recalc() {
     let got = 0;
     for (const s of this.segments) {
@@ -975,9 +1048,8 @@ class DownloadJob extends EventEmitter {
       got += s.done ? s.length : Math.min(s.length, Math.max(0, (s.pos ?? s.start) - s.start));
     }
     this.received = Number.isFinite(got) ? got : 0;
-    if (this.total > 0 && this.speed > 0) {
-      this.eta = Math.max(0, this.total - this.received) / this.speed;
-    }
+    const speed = this._etaSpeed(this.speed);
+    this.eta = this.total > 0 && speed > 0 ? Math.max(0, this.total - this.received) / speed : 0;
   }
 
   _ingestProgress(speed) {
@@ -999,8 +1071,9 @@ class DownloadJob extends EventEmitter {
           p.done = got >= pEnd - pStart;
         }
       }
-    } else if (this.total > 0 && this.speed > 0) {
-      this.eta = Math.max(0, this.total - this.received) / this.speed;
+    } else {
+      const speed = this._etaSpeed(this.speed);
+      this.eta = this.total > 0 && speed > 0 ? Math.max(0, this.total - this.received) / speed : 0;
     }
     this._emitState();
     this._schedulePersist();

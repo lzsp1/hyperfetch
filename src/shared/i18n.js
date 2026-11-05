@@ -394,6 +394,9 @@ const en = {
   'rename.failed': "Rename failed: {error}",
   'rename.done': "Renamed to {name}",
   'feeds.enabled': "Updates are checked against {repo}",
+  'log.stalled': "Connection stalled — retrying",
+  'log.retryIn': "Retrying in {wait}s (attempt {attempt}/{max})",
+  'probe.failed': "Could not read this address — check the network and try again",
 };
 
 const zhCN = {
@@ -747,6 +750,9 @@ const zhCN = {
   'rename.failed': "重命名失败：{error}",
   'rename.done': "已重命名为 {name}",
   'feeds.enabled': "更新检查目标：{repo}",
+  'log.stalled': "连接长时间无响应，正在重试",
+  'log.retryIn': "{wait} 秒后重试（第 {attempt}/{max} 次）",
+  'probe.failed': "无法解析该地址，请检查网络后重试",
 };
 
 const fr = {
@@ -1100,6 +1106,9 @@ const fr = {
   'rename.failed': "Échec du renommage : {error}",
   'rename.done': "Renommé en {name}",
   'feeds.enabled': "Mises à jour vérifiées sur {repo}",
+  'log.stalled': "Connexion bloquée — nouvel essai",
+  'log.retryIn': "Nouvel essai dans {wait} s (tentative {attempt}/{max})",
+  'probe.failed': "Adresse illisible — vérifiez le réseau et réessayez",
 };
 
 const es = {
@@ -1453,6 +1462,9 @@ const es = {
   'rename.failed': "Error al renombrar: {error}",
   'rename.done': "Renombrado a {name}",
   'feeds.enabled': "Las actualizaciones se comprueban en {repo}",
+  'log.stalled': "Conexión bloqueada: reintentando",
+  'log.retryIn': "Reintento en {wait} s (intento {attempt}/{max})",
+  'probe.failed': "No se pudo leer esta dirección: revisa la red e inténtalo de nuevo",
 };
 
 const ru = {
@@ -1806,6 +1818,9 @@ const ru = {
   'rename.failed': "Не удалось переименовать: {error}",
   'rename.done': "Переименовано в {name}",
   'feeds.enabled': "Обновления проверяются на {repo}",
+  'log.stalled': "Соединение зависло — повтор",
+  'log.retryIn': "Повтор через {wait} с (попытка {attempt}/{max})",
+  'probe.failed': "Не удалось прочитать адрес — проверьте сеть и повторите",
 };
 
 const ar = {
@@ -2159,6 +2174,9 @@ const ar = {
   'rename.failed': "تعذّرت إعادة التسمية: {error}",
   'rename.done': "أُعيدت التسمية إلى {name}",
   'feeds.enabled': "يتم التحقق من التحديثات على {repo}",
+  'log.stalled': "الاتصال متوقف — إعادة المحاولة",
+  'log.retryIn': "إعادة المحاولة بعد {wait} ث (المحاولة {attempt}/{max})",
+  'probe.failed': "تعذّرت قراءة هذا العنوان — تحقق من الشبكة وأعد المحاولة",
 };
 
 const MESSAGES = { en, 'zh-CN': zhCN, fr, es, ru, ar };

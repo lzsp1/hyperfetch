@@ -268,8 +268,11 @@ function scheduleProbe(url) {
     const token = ++p.token;
     const res = await window.api.probe(target);
     if (token !== p.token) return;
-    if (!res.ok) {
-      setProbe('error', { message: res.error });
+    if (!res || !res.ok) {
+      // Record the failure so the next attempt is not skipped: after fixing the
+      // network the user pastes the same address again and it must re-probe.
+      p.status = 'error';
+      setProbe('error', { message: (res && res.error) || t('probe.failed') });
       return;
     }
     setProbe('ok', res.data);

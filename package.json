@@ -1,7 +1,7 @@
 {
   "name": "hyperfetch",
   "productName": "HyperFetch",
-  "version": "26.10.311",
+  "version": "26.11.051",
   "description": "HyperFetch — 多线程分段加速下载器",
   "main": "src/main/main.js",
   "author": "HyperFetch",
@@ -60,10 +60,10 @@
         }
       ],
       "icon": "build/icon.png",
-      "artifactName": "HyperFetch-${version}-${arch}-setup.${ext}"
+      "artifactName": "HyperFetch-26.11.051-${arch}-setup.${ext}"
     },
     "portable": {
-      "artifactName": "HyperFetch-${version}-portable.exe"
+      "artifactName": "HyperFetch-26.11.051-portable.exe"
     },
     "nsis": {
       "oneClick": false,
@@ -76,7 +76,7 @@
         "zh_CN"
       ],
       "language": "2052",
-      "artifactName": "HyperFetch-${version}-${arch}-setup.exe"
+      "artifactName": "HyperFetch-26.11.051-x64-setup.exe"
     },
     "publish": [
       {
